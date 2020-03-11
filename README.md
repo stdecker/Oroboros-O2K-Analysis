@@ -8,4 +8,7 @@ These Excel files are intended for initial processing of data from the negative 
 
 ![](Images/Excel_Instructions.png)
 
-The information and averages should automatically be calculated into formats that can be pulled for further analysis. I will be posting my R code for my analysis.
+The information and averages should automatically be calculated into formats that can be pulled for further analysis.
+
+# R code
+This R code is for fast processing and visualization of Oroboros data. I have only made code that will analyze the protocols I frequently use, however I will be developing more as I develop new protocols.
