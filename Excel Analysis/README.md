@@ -1,7 +1,7 @@
 # Instructions for the Excel files
 Once the [data has been copied from DatLab](/README.md), paste the data into the Excel template 
-(either [CHO](Excel%20Analysis/Template%20CHO%20O2K%20Analysis.xlsx) or 
-[Free Fatty Acid](Excel%20Analysis/Template%20FFA%20O2K%20Analysis.xlsx)) in the 'Paste Here' section highlighted.
+(either [CHO](Excel%20Analysis/Template%20CHO%20O2K%20Analysis%20-%20Stephen.xlsx) or 
+[Free Fatty Acid](Excel%20Analysis/Template%20FFA%20O2K%20Analysis%20-%20Stephen.xlsx)) in the 'Paste Here' section highlighted.
 
 ![](Images/Excel_paste.png)
 
