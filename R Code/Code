@@ -1,6 +1,7 @@
 # Below is the code that nI have made for analyzing the Oroboros datafile
-For questions, please contact me. Also recognize that this is a document I plan to change, so please bear with me
+#For questions, please contact me. Also recognize that this is a document I plan to change, so please bear with me
 
+##----------------------------------------------------------------------------------------------------------------------##
 ##Run the Read Excel package, dplyr, ggplot2, etc.##
 ##IF NEEDED: Install package via install.package(readxl)##
 library(readxl)
