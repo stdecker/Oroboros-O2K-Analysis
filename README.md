@@ -3,7 +3,7 @@
 
 These files are publicly available for use and feedback. I intend to post these files to streamline the analysis and visualization of O2K data. I welcome any feedback and intend to maintain these files as living documents.
 
-# Excel FIle
+# Excel File
 The excel file I have made should allow easy transfer of raw data from DatLab into Excel, where it will be organized to be easily read by R.
 
 # R code
