@@ -3,7 +3,7 @@
 ## O2K Excel Files
 These Excel files are intended for initial processing of data from the negative slope data acquired from DatLab. From the DatLab file, select the 'Marks' tab and open the 'Slope Uncorrected + All Info' window (or press F2). From there, select the appropriate chamber (A or B) and statistic (our lab uses an average, but some use median). From here, select 'Copy to Clipboard' and past into the Excel sheet under the 'Raw File' tab. Repeat with the second chamber.
 
-![](Images/Excel_Instructions.png)
+![](/Images/Excel_Instructions.png)
 
 The information and averages should automatically be calculated into formats that can be pulled for further analysis.
 
