@@ -8,3 +8,6 @@ The [excel file](/Excel%20Analysis) I have made should allow easy transfer of ra
 
 # R code
 This R code is for fast processing and visualization of Oroboros data. I have only made code that will analyze the protocols I frequently use, however I will be developing more as I develop new protocols.
+
+# Document Guide
+I have created a [document guide](/O2K-Analysis-Document.pdf), which will go over all of the code in detail and how to perform various other tests and measurements in R.
