@@ -1,0 +1,1245 @@
+----------------------------------------------------------------------------------
+This is the code I used to write the document guide using RMarkdown in R 4.0.0
+----------------------------------------------------------------------------------
+
+
+---
+title: "__Analysis of Mitochondrial Respiration:__"
+subtitle: "A Guide for the Analysis and Visualization of Respirometry Data Using R"
+author: "__Stephen Decker, MS, ACSM-CEP__  \nDepartment of Kinesiology  \n University of Massachusetts Amherst"  
+date: "Last Updated `r format(Sys.Date(), '%B %Y')`  \nBuilt with R version `r getRversion()`"
+output: pdf_document
+highlight: "textmate"
+toc: true
+fontsize: 12pt
+header-includes:
+- \usepackage{graphicx}
+- \graphicspath{{C:/Users/Stephen/Desktop/Graphics/}}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyfoot[L]{\href{https://twitter.com/decker_st}{\includegraphics[width=.65cm]{Twitter.png}}} 
+- \fancyfoot[C]{\href{https://www.linkedin.com/in/stephen-decker-7496786b/}{\includegraphics[width=.65cm]{LinkedIn.png}}}
+- \fancyfoot[R]{\href{https://github.com/sdecker4/Oroboros-O2K-Analysis}{\includegraphics[width=.65cm]{GitHub.png}}}
+- \fancyhead[R]{\thepage}
+
+linkcolor: "blue"
+geometry: bottom=1.1in, margin=1in
+latex_engine: tinytex
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+\pagebreak
+
+# Disclaimer {#Disclaimer}
+
+|         This is a template for the code to analyze mitochondrial respiration rates collected from the Oroboros Oxygraph O2K. I have created this file for public use, but please consider that I did this out of my free time and will continue to update and change this document as time goes on.  
+  
+|         I **_do not_** intend to restrict access to this document. However, my only request is that if others use this document, appropriate referencing and citation to this project is greatly appreciated when necessary. Furthermore, I fully intend to update this document as my skills in R improve and more methods of analysis become available. For comments, questions, or concerns, please email me at stdecker@umass.edu or contact me via any of the links at the bottom of each page. Also, much of my knowledge has come from a vast source of publicly available sources -- books, [Stack Exchange](stats.stackexchange.com), [Data Novia](www.datanovia.com), and others. If you wish to have any of this information, please contact me and I will gladly share my resources. I will also include links to them (if possible) at [the end of this document](#Resources).  
+  
+|         Please keep in mind that I am a physiologist by training. I try to do my best with statistics and code, but neither of those are something I would consider my trade. Thus, I am very open to hearing comments and critiques of this document and suggestion for improvements are much appreciated. My ultimate goal is to produce science in the *__correct__* way, and I will gladly take any feedback on how to achieve that goal.
+***
+\pagebreak
+# 1. Basics of this Document {#Basics}
+I would like to outline some of the code I think is critical to understand for this document:  
+  
+## 1.1. Packages {#Packages}
+```{r eval = FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+...
+```
+  
+|         You'll notice that I use several packages in this document. This is simply because the analyses that I have below will call upon many functions that are spread across several packages.You may not need all of these packages to run this code, depending on what you are trying to do with this analysis. However, I will include all of these in my documentation for my use. Feel free to discard anything you think may be unused. More importantly, I find that resources, such as [RDocumentation](https://www.rdocumentation.org/) and the [CRAN package search](https://cran.r-project.org/) are very useful guides to understanding the capabilities and layout of each package.   
+
+|         To install a package, you'll simply use the `install.packages()` function with the name of the package in parentheses. Then, you must load the package from your R library using the `library()` function. To install and load a package like the `'praise'` package, do the following:
+
+```{r eval = FALSE}
+install.packages("praise")
+```
+
+```{r}
+library('praise')
+```
+
+|         Great! now, we can begin using the functions inside this package. The 'praise' package only has one function. If we use this function in our code, we should see an output that gives us a compliment, like so:
+```{r}
+praise()
+```
+
+## 1.2. Taking Notes {#Notes}
+
+|         Taking notes is a particularly useful skill to utilize in R, especially when running long lines of code (like you will probably do in graphing). To make a note, simply put a `'#'` followed with text, then start a new line to continue the code. This note will not be analyzed by R, but will remain in the interface. For an example:
+
+```{r}
+#The 'praise' package gives me praise when I use it
+praise()
+
+#2 x 3 always equals 6
+2*3
+```
+
+
+## 1.3. Pulling data from Excel {#Pulling}
+```{r eval = FALSE}
+df.name <- read_excel("c\\Users\\complete_file_path\\file_name.xlsx", 
+      sheet = "Sheet Name", col_names = TRUE)
+```
+|         This line of code will pull your data from an Excel sheet. I have provided [an Excel template file](https://github.com/sdecker4/Oroboros-O2K-Analysis/tree/master/Excel%20Analysis) on my personal GitHub page. Please feel free to use this as needed with the same stipulations mentioned earlier. The code I have made below is made for the setup in this file, so keep that in mind as this data becomes analyzed.  
+  
+|         This script is fairly intuitive to understand --- you will name your data frame (by changing "df.name") and your full file path (including the path directory) goes into the first set of quotations. If you have specific sheet names you wish to call upon, it goes into the next set of quotation marks. Lastly, if you have column names, keep this as TRUE.  
+  
+## 1.4. Statistical Analyses {#Stats}
+|         You will notice that I have several different methods of analyzing the data (t-tests, ANOVA) in this document. I have tried to include several different types of analyses and ways to streamline these analyses.  
+|         One __major__ thing to consider in this process is the layout of the data being analyzed. In order to run a proper ANOVA, you *__must__* have the data organized in [long format, not wide format](https://www.theanalysisfactor.com/wide-and-long-data/). There are [ways to do that](http://www.cookbook-r.com/Manipulating_data/Converting_data_between_wide_and_long_format/) and I cover it [later in the document](#Wide-Long), but I will note that my excel files come in both wide (in the t-test tab) and long format (in the ANOVA tab) so that the analysis can be done without that conversion. However, it may be useful to explore that, especially if you want to add other variables of your own in this analysis.
+
+### 1.4.1. T-tests {#t-tests}  
+|         Performing t-tests in these types of analyses are, in my opinion, controversial at best. I've heard the argument that the addition of different substrates to the respiration medium changes the state in which the sample exists, and therefore these are independent conditions. However, I think it could easily be argued that the respiration of a sample is dependent on the individual sample and therefore the respiration of a sample in any given state is still dependent on the other states. Furthermore, there is always the issue of a family-wise error in the p-value. Therefore, I still recommend performing an ANOVA for all analyses, but it is the choice of each lab to make that decision.  
+
+```{r eval= FALSE}
+ttest_values <- lapply(df.name[,6:16], function(x) 
+      t.test(x~ df.name$data_range, na.rm = TRUE))
+ttest_pvalues <- data.frame(p.value = 
+      sapply(ttest_values, getElement, name = "p.value"))
+```
+  
+|         For example, I have designed this code to perform several t-tests (10 to be exact --- from column 6 to 16) with one line of code, then it will output a data frame with all of the p-values using the second line of code. Again, we run into the issue of family-wise p-values in this type of analysis, and I have not yet accounted for that in this analysis. I will explain this in more detail later. 
+  
+### 1.4.2. ANOVA {#ANOVA1}
+|         The ANOVA code is pretty straightforward. With this code, you can perform a one-way or a two-way ANOVA extremely easily. I would rely more heavily on these results compared to the t-tests, following the code for a one-way ANOVA:
+```{r eval=FALSE}
+ANOVA_model <- aov(df.name$dependent.variable ~ 
+      df.name$factor1, data = df.name)
+anova(ANOVA_model)
+```
+
+Or a two-way and/or factorial ANOVA:
+```{r eval=FALSE}
+ANOVA_model <- aov(df.name$dependent.variable ~ 
+      df.name$factor1 * df.name$factor2, data = df.name)
+anova(ANOVA_model)
+```
+|         I find this process to be pretty easy to understand. The first line creates a linear model of the data using the  `` 'aov' `` function. This calls the 'dependent variable' and the grouping and condition (independent) variables. Then, the ` 'anova' ` function will run a Type I ANOVA, completing sum of squares (Sum Sq), degrees of freedom (Df), F values, probability (Pr), and denoting significance with asterisks. Overall, this should give you everything you need for a fundamental analysis of the ANOVA. Alternatively, you can use the `Anova` function for a Type II and Type III ANOVA. For more information on this, [see this description](https://mcfromnz.wordpress.com/2011/03/02/anova-type-iiiiii-ss-explained/). For example, the output for a two-way ANOVA will be a table similar to the one as follows:
+```{r eval=FALSE}
+Analysis of Variance Table
+
+Response: df.name$dependent.variable
+                                              Sum Sq  Df F value  Pr(>F)    
+df.name$condition                             335.9   1  3.4005 0.06729 .  
+df.name$group                               29767.4   9 33.4822 < 2e-16 ***
+Interaction                                   338.0   9  0.3802 0.94299    
+Residuals                                   13829.7 140                    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+|         This format is fairly simple to understand the overall significance of the ANOVA. For further analyses (such as post-hoc tests), there is a way to perform a Tukey HSD or pairwise t-tests. Additionally, you can [analyze the linear model](#GLM) on these data.
+
+## 1.5. Graphing {#Graphing}
+
+|         I will also include code to [create plots](#Visualizing), for example, a bar plot:
+```{r resp-plot, echo=FALSE, fig.width = 12, fig.height= 5, fig.align= "center", font.size = 1.5, fig.cap= "Sample representation of graphing respirometry data with bar graphs."}
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(zeallot)
+library(reshape2)
+library(Rmisc)
+library(car)
+library(compute.es)
+library(multcomp)
+library(pastecs)
+library(mc2d)
+library("RColorBrewer")
+library("googleVis")
+library("vcd")
+library("ggsignif")
+library(grid)
+library(fBasics)
+library(gdata)
+library(rlist)
+library(stringr)
+FFA_ANOVA_Example <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data ANOVA", col_names = TRUE)
+
+
+#remove rows with NA (select number of rows to include) and cytc#
+#FFA_ANOVA <- FFA_ANOVA[1:140,]
+FFA_ANOVA_Example<-FFA_ANOVA_Example %>% dplyr::filter(row_number() %% 11 != 8) ## Delete every 11th row starting from 8 to remove CytC
+FFA_ANOVA_Example<-na.omit(FFA_ANOVA_Example)
+
+#Vertical lines
+vert.lines <- c(1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5)
+
+#set variables as categorical#
+#use file.name$column <- as.factor(file.name$column)
+FFA_ANOVA_Example$Subject<-as.factor(FFA_ANOVA_Example$Subject)
+FFA_ANOVA_Example$Condition<-as.factor(FFA_ANOVA_Example$Condition)
+FFA_ANOVA_Example$Leg<-as.factor(FFA_ANOVA_Example$Leg)
+FFA_ANOVA_Example$`Respiration State`<- factor(FFA_ANOVA_Example$`Respiration State`, levels = c("Basal", "OctM", "OctMD(25)", "OctMD(50)", "OctMD(250)", "OctMD(5000)", "OctMDGS", "FCCP Peak", "Omy", "AmA"))
+FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)` <- as.numeric(FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)`)
+
+
+ggplot(FFA_ANOVA_Example, aes(x=`Respiration State`, y=`Respiration Rate (pmol/sec/mg)`, 
+                      fill = `Condition`)) +
+  
+  #Adds standard error bars#
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(width=0.75), width = 0.3, size = 1) +
+  #Adds Average bars#
+  stat_summary(fun = mean, geom = "bar", width = 0.75, position = position_dodge2(width = 5), colour = "black", size = 1) +
+  
+  #add significance
+  stat_compare_means(aes(group = `Condition`), label = "p.signif", label.y = 62, hide.ns = TRUE, method = "t.test", size = 5) +
+  #stat_compare_means(comparisons = FFA_ANOVA_Example$Condition) +
+  #Graph labels#
+  labs(x = "", y = "Respiration Rate (pmol/sec/mg)", fill = "Condition") +
+  #Removes Data point from legend#
+  guides(fill = guide_legend(override.aes = list(shape = NA))) +
+  #removes gridlines and top/left borders#
+  #theme_classic() +
+  #Make y-axis start at 0, set limits#
+  scale_y_continuous(expand = c(0, 0), limits = c(0,70), breaks=seq(0,70,10)) + 
+  #Make bars different colors#
+  scale_fill_manual(values = c("white", "dark red")) + 
+  #Adjust fonts#
+  #theme(plot.title = element_text(hjust = 0.5),
+       # axis.line = element_line(size = 1), axis.ticks = element_line(size = 1), 
+        #axis.text.x = element_text(size = 12, color = "black"), 
+        #axis.text.y = element_text(color = "black", size = 12),
+        #axis.title.y = element_text(size = 16, margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        #plot.caption=element_text(size=12, margin=margin(t=15))) +
+  geom_vline(xintercept = vert.lines, color = "grey", linetype = "longdash")
+```
+
+Or, we can make box plots like so:
+```{r box-plot, echo=FALSE, fig.width =10, fig.height= 5, fig.align= "center", font.size = 1.5, fig.cap= "Sample representation of graphing respirometry data with boxplots."}
+boxplot_example <- ggboxplot(FFA_ANOVA_Example, x="Respiration State", y="Respiration Rate (pmol/sec/mg)", 
+                      fill = "Condition", sort.by.groups = TRUE, palette = c("white", "dark red"), xlab = FALSE) + 
+  scale_y_continuous(expand = c(0,0),breaks = get_breaks(by = 10, from= 0), limits = c(0,80)) +
+  rotate_x_text(45) +
+  stat_compare_means(aes(group = `Condition`), label = "p.signif", label.y = 75, hide.ns = TRUE, method = "t.test", size = 5) +
+  theme(axis.title.y = element_text(size = 12, margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+ggpar(boxplot_example, font.y = 12, ylim = c(0,80), legend = "right") +
+  geom_vline(xintercept = vert.lines, color = "grey", linetype = "longdash")
+```
+
+  
+\break
+  My aim is to cover most of the basics of these functions and give out details to my code so that others can easily create graphical representations and reports of their own. However, as I am not quite an expert with all of this and I am learning as I go, I will not be able to cover everything. Hopefully, though, I have enough covered in this document to help guide most people through the process of analyzing and visualizing respirometry data
+  
+  
+  ***
+\pagebreak
+# 2. Preparing the Data {#Preparing}
+|         Overall, this process of running an analysis is pretty simple and straightforward. [As I mentioned earlier](#t-tests), it is best to avoid running t-tests on data sets such as these because of the family-wise error problem. I'm not saying you shouldn't ever run t-tests, but it certainly makes sense to run an ANOVA (or better yet, a planned comparisons analysis) and then t-tests with appropriate post-hoc corrections.  
+
+## 2.1. Pulling the Data {#Pulling2}
+|         I mentioned the steps for this process in the [Pulling data from Excel](#Pulling) section of this document. Since I mostly use Excel files for my processing and I have a fairly useful template file, I will stick with pulling the data from Excel. If you have other means of processing the data, feel free to skip this section. Last, since the data in the ANOVA tab is usually the only data that needs to be cleaned up, I will focus on this data. The data in the t-test tab usually doesn't need any cleanup, and any cleanup it needs will be done using the methods outlined in this section.  
+|         For this step, we will need to load the `'readxl'` package from our library by using the command below.[^1] 
+[^1]: *If you haven't installed this or other packages, do so by using the ``` 'install.packages()' ``` command; for example, ` install.packages('readxl') ` would be used to install this package.*
+``` {r eval= FALSE}
+library(readxl)
+```
+|         This simply tells R that you will be calling some of the functions within this package, which we will certainly do. Next, we run the code to extract the data we need from the excel sheet using the ` 'read_excel' ` function. Notice that it important to use the full file directory when extracting the Excel file. We should use the following:
+```{r eval = FALSE}
+df.name <- read_excel("c\\complete_file_path\\file_name.xlsx", 
+      sheet = "Sheet Name", col_names = TRUE)
+```
+Or, something more realistic might be:
+```{r eval= FALSE}
+FFA_ANOVA_Example <- read_excel(
+  "C:\\Users\\Your_name\\Desktop\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data ANOVA", col_names = TRUE)
+```
+This function will give us a data frame from the sheet we have selected (in this example the 'Final Data ANOVA' Sheet). If you have different names for sheets, you can change this by editing the ` function sheet = ` line. Simply replace the name in quotations with your own. However, it is important to maintain the quotations around the sheet name.
+```{r echo = FALSE}
+FFA_ANOVA_Example <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data ANOVA", col_names = TRUE)
+```
+|         If we now begin to look to see what the data frame looks like by typing the name of the data frame (in this case ` 'FFA_ANOVA_Example'`) we will get something that matches the data table we have from Excel. If we look at the first few rows:
+```{r echo = FALSE}
+library(knitr)
+
+knitr::kable(head(FFA_ANOVA_Example, 10), digits = 2, align = 'c', caption = "First 10 rows of the data set.")
+```
+
+You'll notice in this data frame the columns have been identified and transferred into the data frame. This can be modified by the ` col_names= ` line -- if you don't want to have the column names, simply change ` TRUE ` to ` FALSE `. Furthermore, the data columns in this document all have random values. Other than that that, any other cells that have any sort of value in them will only appear as ` "NA" `. Once missing numbers have been filled in, you will see those numbers in their respective column. We will get into some more of the details of the data frame later. If we want to use the t-test tab, simply change the code to:
+```{r eval = FALSE}
+FFA_ttest_Example <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data t-test", col_names = TRUE)
+```
+
+That should have all of the same information, just in a different layout, which we will discuss next.
+
+## 2.1.1. Wide & Long Formatting {#Wide-Long}
+|         Something that may be useful to have in your arsenal is being able to change your data from [wide format to long (otherwise known as narrow or vertical) format](https://en.wikipedia.org/wiki/Wide_and_narrow_data). *__Long format will be very useful when we [graph our data](#Visualizing), which is why I will give you ways to calculate all of your variables in long format as you will need to have the code in long format eventually.__* This is extremely critical, and some of the functions are just more intuitive to perform in long format so I don't always have the code done in wide format. I define these terms as follows 
+* **Wide format** is the arrangement of data such that each variable is in its own column, and each row is assigned to only one subject.  
+* **Long format**, on the other hand, is the arrangement of data such that one column contains all of the values of a variable and another column contains the context of this given value.  
+  
+If we refer to our [Excel sheet that I have provided](#Pulling), you will notice that the tab titled "Final Data t-test" is in wide format, where if I take the first 9 columns we should see the following:
+```{r echo = FALSE}
+#Load data in wide format
+FFA_ANOVA_wide <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data t-test", col_names = TRUE)
+
+kable(head(FFA_ANOVA_wide[1:9], 10), digits = 2, align = 'c', caption = "Example of Wide Format")
+```
+
+Long format would look like the data we get in the ANOVA tab, where we have each column represented by some variable (such as 'Respiration State') and a value (such as 'Respiration Rate')
+```{r echo = FALSE}
+#Load the data in long format
+FFA_ANOVA_long <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data ANOVA", col_names = TRUE)
+
+kable(head(FFA_ANOVA_long, 15), digits = 2, align = 'c', caption = "Example of Long Format")
+```
+
+|         Sometimes it is more useful to look at the data in wide format, then convert it to long format for further analysis. For example, it would be fairly difficult to get a general idea of what the respiration rates are during Basal respiration if the data are in *long* format. However, *wide* format makes it much easier for us to see all of the data that we would want to compare. Furthermore, some analyses (such as t-tests) need to be done with data in wide format, while others (such as ANOVAs) need to be done in long format.  
+  
+|         Although I have already [created a basic Excel template](#Pulling) that has a tab with the data in long format (which was quite tedious to do in Excel), it may be useful to understand this process in R as it is very simple to do and will save quite a bit of time. The process to go from wide to long format is as simple as:
+```{r}
+FFA_ANOVA_long2 <- gather(FFA_ANOVA_wide, "Respiration State", 
+                          "Respiration Rate (pmol/sec/mg)", 
+                          Basal:AmA, factor_key = TRUE)
+```
+Which should give us an output of:
+```{r echo = FALSE}
+kable(head(FFA_ANOVA_long2, 15), digits = 2, align = 'c', caption = "Our New Table")
+```
+
+## 2.2. Cleaning the Data {#Cleaning}
+|         Now that we have our data in R, we need to clean the data. This includes removing all 'NA' values and Cytochrome C (because we usually do not plot these data and only use it as a quality control variable), and recoding the data into their proper data variable. These processes are much simpler to do than they sound..
+### 2.2.1. Removing unwanted data {#Removing}
+|         To remove the unwanted data in long format,[^6] we will need to load the 'Tidyverse' package using the command ` 'library(tidyverse)' `. To remove all of the Cytochrome C and 'NA' values, we will use a couple of different commands. I find these commands to be fairly intuitive to follow. With the first command, we will just tell R to remove the Cytochrome C data from the document. Again, we only do this because we rarely report them in the actual data, but if you need them you can ignore that line of code. The second command is very important, as it will remove all 'NA' values from this sheet. This is extremely critical as you cannot run any statistical analyses with 'NA' values in the data frame.
+
+[^6]: *I recommend doing this step in long format, as the na.omit or na.rm functions will remove entire rows of data, which is not very desirable in most situations. A partial data set is sometimes better than a null data set.* 
+
+```{r}
+#remove cytc and rows with NA (select number of rows to include)#
+
+## Delete every 11th row starting from 8 to remove CytC
+FFA_ANOVA_Example <- FFA_ANOVA_Example %>% dplyr::filter(
+  row_number() %% 11 != 8) 
+
+##Remove all NA values##
+FFA_ANOVA_Example <- na.omit(FFA_ANOVA_Example)
+```
+
+The first command uses ` 'dplyr' ` to remove every nth row starting at row x. If we look at the way I have organized the 
+Excel sheet, we will notice that a value for Thus, in this case, we have chosen to remove every 11th row starting at row number 8. If you have different rows for the cytochrome c values, you can modify this accordingly.  
+The second piece of code here uses the ` 'na.omit()' ` function to remove all ` 'NA' ` values in the data frame. If we run the code now, we should get:
+```{r echo = FALSE}
+knitr::kable(head(FFA_ANOVA_Example), caption = "First Few Rows of the Data with CytC Removed") 
+```
+
+This new line now has all of the CytC and NA values removed, just like we wanted!
+
+### 2.2.2. Recoding the data as correct data variables {#Correcting}
+Now that we have all of our "unimportant" data removed from our data frame, we need to gather basic information about our data, namely the type of data variables we have --- such as characters (chr), numeric (num), logicals(logi), integers (int) and factors. These are important to identify as each of these describes how R will handle the data during an analysis. For example, we can make groups by identifying some data as 'Factors'. When we pull our data from Excel into R, R cannot identify these without us specifically identifying each type of data. We would not be able to run any analysis without first doing this because R would label them all as characters or something that wouldn't be of use to us. Thus, To show that our data are, in fact, not identified as correct variables, we can use the  ' `glimpse()' ` function (or we can similarly use the ` 'str()' ` function) as below:
+```{r}
+#Take a look at the data
+glimpse(FFA_ANOVA_Example)
+```
+It's clear here that R does not identify these variables as the correct data variables. For example, we would ideally want the variables "Subject", "Condition", "Leg", and "Respiration State" as 'Factors' because these are variables we use to identify certain characteristics such as the specific subject, the baseline or post condition, which leg we used, and the type of state the sample is placed in. Likewise, "Respiration Rate" should be a numeric variable (which it is already, but I will run through the code anyway). Therefore, we should probably attempt to change these into usable variables for our later analyses. Basically, we will simply recode these using functions such as ` 'as.factor' ` and ` 'as.numeric' `.
+```{r}
+#Recode Subjects as factors#
+FFA_ANOVA_Example$Subject <- as.factor(FFA_ANOVA_Example$Subject)
+
+#Recode Condition as factors#
+FFA_ANOVA_Example$Condition <- as.factor(FFA_ANOVA_Example$Condition)
+
+#Recode Leg as factors#
+FFA_ANOVA_Example$Leg <- factor(FFA_ANOVA_Example$Leg)
+
+#Recode Respiration States as factors#
+FFA_ANOVA_Example$`Respiration State` <- factor(
+  FFA_ANOVA_Example$`Respiration State`, levels = 
+    c("Basal", "OctM", "OctMD(25)", "OctMD(50)", "OctMD(250)", 
+      "OctMD(5000)", "OctMDGS", "FCCP Peak", "Omy", "AmA"))
+
+#Recode Respiration Rate as numeric#
+FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)` <- as.numeric(
+        FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)`)
+```
+Notice that with the 'Respiration State' factor, we must identify the order of levels so that we can properly order these data in our graphs. To check if these data are properly identified, we will rerun the ` 'glimpse()' ` function:
+```{r}
+#Take a look at the data
+glimpse(FFA_ANOVA_Example)
+```
+
+### 2.2.3. Renaming variables {#Renaming}
+
+If you ever need to rename variables, which [happens from time to time](#Density), you can do so quite simply. If we wanted to rename 'FCCP Peak' to just 'FCCP' in wide format, we would do:
+```{r eval = FALSE}
+#Rename "FCCP Peak" to "FCCP"
+names(FFA_ttest_Example)[names(FFA_ttest_Example)=="FCCP Peak"] <- "FCCP"
+```
+Or with the long format:
+```{r eval = FALSE}
+#Rename FCCP Peak to FCCP
+gsub("FCCP Peak", "FCCP", FFA_ANOVA_Example$`Respiration State`)
+```
+
+
+Now that it looks like all of the data are properly structured, we can continue with the rest of the analysis.  
+
+
+
+***
+\pagebreak
+# 3. Glancing at Descriptive Data
+|         First, I think it would be good to discuss how to get descriptive data, since they are always reported in manuscripts. Overall, this is going to be an easy process, and I will detail how to get the descriptive data in both [wide ad long format](#Wide-Long).
+
+## 3.1. Descriptives in Wide Format (for t-tests) {#DescWide}
+|         First, we must load the data in wide format from the 'Final Data t-test' tab in the Excel file, like so:
+```{r}
+#load readxl
+library(readxl)
+
+# Put the excel file into R
+FFA_ttest_Example <- read_excel(
+  "C:\\Users\\Stephen\\Desktop\\O2K Analysis Files\\Example_FFA_O2K_Analysis.xlsx", 
+  sheet = "Final Data t-test", col_names = TRUE)
+```
+
+And we should see something like this:  
+  
+```{r, echo=FALSE}
+knitr::kable(head(FFA_ttest_Example[1:8], 10), caption = "The First 10 Rows and the First 8 Columns of the T-test Data (Wide Format)")
+```
+
+Next, we will use the `'describe.by'` function in the `'psych'` package.
+
+```{r}
+#Load the psych package
+library(psych)
+
+#Calculate descriptive data
+stat_summary_ttest <- describe.by(FFA_ttest_Example[5:15], 
+                        FFA_ttest_Example$Condition)
+```
+
+This will actually give us two (or more, if you have more groups) tables. To extract the tables individually to look at clean data, we only need to call each condition we have. For example, if I want to look at the baseline condition, I only need to type `'stat_summary_ttest$Baseline'` and the data will be shown as follows:
+
+```{r}
+#Separate baseline and post data
+baseline_desc <- stat_summary_ttest$Baseline
+post_desc <- stat_summary_ttest$Post
+```
+
+When we look at the data, we should see a lot of information. Mean, SD, skew, SE, etc. which should be about all of the descriptive information we need. Below is an abbreviated table (only mean, SD, median, and SE) with the baseline information:  
+
+```{r, echo = FALSE}
+library(tidyverse)
+library(knitr)
+
+knitr::kable(subset(baseline_desc, select = c("mean", "sd", "median", "se")), caption = "Baseline Descriptives")
+```
+
+And the post intervention information:
+```{r, echo = FALSE}
+knitr::kable(subset(post_desc, select = c("mean", "sd", "median", "se")), caption = "Post Intervention Descriptives")
+```
+
+
+## 3.2. Descriptives in Long Format (for ANOVAs) {#DescLong}
+|         Just like I did with the t-test, I will first go over the process to get descriptive data. Now, for this step your data should be [in long format](#Wide-Long), which you will need for the main part of the ANOVA anyway (this data format is the same that I used in the [preparing section](#Preparing)). We can get all of the same descriptive information as we did in the previous section by doing the following:
+
+```{r eval = FALSE}
+#Calculate descriptive data
+by(FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)`, 
+   list(FFA_ANOVA_Example$`Respiration State`, 
+        FFA_ANOVA_Example$Condition), stat.desc, basic = FALSE)
+```
+  
+This output is very large, so I won't include it in this document, but it does contain all of the same information as the descriptive data we did in [the t-test section](#DescWide), so you can choose whatever method is easiest (I prefer the nice tables, so I normally use the other way).
+
+
+***
+\pagebreak
+# 4. Testing for the Assumptions of Normality & Homogeneity of Variance {#AssumptionTests}
+|         Now, if we remember from our statistics class (or possibly not), we should recognize that the t-test and ANOVA both have certain assumptions in order to be properly run. These are:  
+* Independence of cases
+* Normality
+* Homogeneity of Variance (or in the case of an ANOVA, sphericity)  
+  
+If you want to read more on this, [you can do so here](https://en.wikipedia.org/wiki/Analysis_of_variance#Assumptions). If either of the last two of these are violated, we must use a non-parametric test such as a Wilcoxon test (paired samples t-test), Mann-Whitney test (for independent sample t-tests), Kruskal-Wallis test (for one-way or two-way ANOVA), or Friedman test (for repeated-measures ANOVA) instead[(more on this in the t-test section)](#nonparattest). As I did in the [Preparing the Data](#Preparing) section, I will use the ANOVA table for simplicity. It seems like running these tests in long format is smoother than running it in wide format, however, you can use wide format if you want to use the `'aggregate'` and `'merge'` functions.   
+  
+## 4.1. Testing for Normality {#Normality}  
+|         In order to determine the Normality via the Shapiro-Wilk test, we will need to run something like this:
+```{r}
+#Shapiro Test for Normality#
+
+#Load the data.table package
+library(data.table)
+
+#place the data frame into the data.table package format
+DT <- data.table(FFA_ANOVA_Example)
+
+#perform the Shapiro Test with the new data
+shapiro_results <- DT[,
+   .(Statistic = shapiro.test(
+     `Respiration Rate (pmol/sec/mg)`)$statistic, 
+     P.value = shapiro.test(
+       `Respiration Rate (pmol/sec/mg)`)$p.value),
+   by = .(`Respiration State`)]
+```
+
+```{r echo = FALSE}
+knitr::kable(shapiro_results, caption = "Normality Test Results")
+```
+
+
+From here we now have the table:  
+\begin{tabular}{ | p{5cm} | p{5cm} | p{5cm} |}
+\hline
+  Factor A & Statistic & P-value \\ \hline
+  Factor A1 & Statistic~A1~ & P-value~A1~ \\ \hline
+  Factor A2 & Statistic~A2~ & P-value~A2~ \\ \hline
+  Factor A3 & Statistic~A3~ & P-value~A3~ \\ \hline
+  Factor A4 & Statistic~A4~ & P-value~A4~ \\ \hline
+  Factor A5 & Statistic~A5~ & P-value~A5~ \\ \hline
+  ... & ... & ... \\ \hline
+\end{tabular}
+
+Where the first column is the factor ('Respiration State' in our data) and the second column is the p-value of the Shapiro test. Furthermore, if we have more than one grouping factor (as we do in this case), we can simply adjust the code by adding a ``` '+ `Factor2`' ``` like below:
+```{r}
+#Perform the Shapiro test
+shapiro_results2 <- DT[,
+   .(Statistic = shapiro.test(
+     `Respiration Rate (pmol/sec/mg)`)$statistic, 
+     P.value = shapiro.test(
+       `Respiration Rate (pmol/sec/mg)`)$p.value),
+   by = .(`Respiration State`, `Condition`)]
+```
+
+```{r echo = FALSE}
+knitr::kable(shapiro_results2, caption = "Normality Test Results by Group")
+```
+
+And the output:
+
+\begin{tabular}{ | p{3.75cm} | p{3.75cm} | p{3.75cm} | p{3.75cm} | }
+\hline
+  Factor A & Factor B & Statistic & P-value \\ \hline
+  Factor A1 & Factor B1 & Statistic~A1B1~ & P-value~A1B1~ \\ 
+  Factor A2 & Factor B1 & Statistic~A2B1~ & P-value~A2B1~ \\ 
+  ... & ... & ... & ... \\ \hline
+  Factor A1 & Factor B2 & Statistic~A1B2~ & P-value~A1B2~ \\ 
+  Factor A2 & Factor B2 & Statistic~A2B2~ & P-value~A2B2~ \\ 
+  ... & ... & ... & ... \\ \hline
+  Factor A1 & Factor B3 & Statistic~A1B3~ & P-value~A1B3~ \\ 
+  Factor A2 & Factor B3 & Statistic~A2B3~ & P-value~A2B3~ \\ 
+  ... & ... & ... & ... \\ \hline
+    ... & ... & ... & ... \\ \hline
+\end{tabular}
+Where the first column is the first factor ('Condition' in our data), the second column is the second factor ('Respiration State' in our data), and the third column is the p-value of the Shapiro test. And so on.  
+  
+|         Now, once we have this data, we can determine if the normality assumption has been violated by looking at the p-values. If any of the p-values are significant (as we see in this data), we must assume that the assumption of normality has been violated and you cannot use an ANOVA for this test (instead use a non-parametric test).  
+  
+I will also note that the following function may be used to get the same results. You can choose either one, but I found the previous code to also work with the tests for Variance below. I have only included it for reference.
+```{r}
+#Load rstatix
+library(rstatix)
+
+shapiro_aggregate <- aggregate(formula = `Respiration Rate (pmol/sec/mg)` ~ 
+            `Respiration State` + `Condition`,
+          data = FFA_ANOVA_Example,
+          FUN = function(x) {y <- shapiro.test(x); c(y$p.value)})
+```
+
+```{r echo = FALSE}
+knitr::kable(shapiro_aggregate, caption = "Normality Test Results Using the 'aggregate()'")
+```
+  
+## 4.2. Testing for Variance {#Variance}  
+|         For testing the homogeneity of variance among the samples using the F-test, we will use this line of code similar to the one above:
+```{r}
+#Perform the F-test
+variance_results <- DT[,
+   .(Statistic = var.test(
+     `Respiration Rate (pmol/sec/mg)` ~ `Condition`)$statistic, 
+     P.value = var.test(
+       `Respiration Rate (pmol/sec/mg)`~ `Condition`)$p.value),
+   by = .(`Respiration State`)]
+```
+
+```{r echo = FALSE}
+knitr::kable(variance_results, caption = "Variance Test Results")
+```
+
+Or we can use Levene's test[^2], which is more robust to deviations of normality, as follows: 
+```{r}
+#Load rstatix
+library(rstatix)
+
+#Perform Levene's test
+levene_results <- DT %>%
+  group_by(`Respiration State`) %>%
+  levene_test(`Respiration Rate (pmol/sec/mg)` ~ Condition)
+```
+
+```{r echo = FALSE}
+knitr::kable(levene_results, caption = "Levene's Test Results")
+```
+
+
+[^2]: *I'm not sure why I can't get all of these functions to work under one package, which is why I have all of these options to make the same code. Use what works best for you.*  
+  
+
+|         We only need to run this code to compare the two conditions (Baseline vs Post) within each Respiration State because the goal of the F-statistic is to make sure that the variance between two variables is equal. Since, in this case, the two variables we would compare would be the Baseline and Post values, we only need to compare those.  
+  
+|         Ideally, we should not see any significant values in our tests we have run above. Though, as you can see, we have a few variables that have kicked back a couple of significant p-values. There are a few options, in my opinion, that can be done at this point:
+- You can perform a non-parametric test. This can be done, however, you will most likely lose some power in your further analyses.
+- You can ignore the significant values. There are several reasons for coming to this conclusion based on these data, but the biggest reason is that we have performed several comparisons, and thus have accumulated a greater chance of a type-I error, or, a false positive. If we consider that the probability of a variable becoming significant due to random chance increases as we perform more comparisons, then we must consider that some of these p-values must be subject to the same randomness. Therefore, if we apply a correction for this randomness (such as a Bonferroni or Tukey correction), our values are clearly no longer significant.
+
+|         I would argue for the second case in these random data I have created for the sake of this manuscript (and that the data that have been identified are not of extreme importance to these data, but that itself is a weak argument). However, I strongly encourage each individual data set be properly analyzed for these parameters.
+
+## 4.3. Further Considerations {#MoreAssumptions}
+|         It is important to acknowledge the limitations above. First, I am assuming you will only be comparing 2 factors (Baseline vs Post), rather than multiple factors. If you wish to compare more than 2 factors (e.g. Young, Middle-Age, and Elderly), you can perform Levene's test like above (though I will add I haven't tested the code yet, but it may be done in one of my projects soon). 
+
+### 4.3.1. Borwn-Forsythe Test {#Brown-Forsythe}
+|         Furthermore, if you wish to change the center of the Levene Test from 'mean' (the default parameter) to 'median' (also known as a Brown-Forsythe Test), simply add `center = median` to the code as follows:
+```{r}
+library(rstatix)
+
+BrownForsythe_results <- DT %>%
+  group_by(`Respiration State`) %>%
+  levene_test(`Respiration Rate (pmol/sec/mg)` ~ Condition, center = median)
+```
+
+```{r echo = FALSE}
+knitr::kable(BrownForsythe_results, caption = "Brown-Forsythe Test Results")
+```
+
+
+### 4.3.2. Mauchly's Test for Sphericity {#Mauchly}  
+|         Similarly, if you are running a [repeated-measures ANOVA (discussed later)](#Repeated), you should use Mauchly's test in the as follows:
+```{r eval = FALSE}
+#Load the package ez
+library('ez')
+
+#Set factor levels for Respiration State
+DT$State<- factor(
+  FFA_ANOVA_Example$`Respiration State`, levels = 
+    c("Basal", "OctM", "OctMD(25)", "OctMD(50)", "OctMD(250)", 
+      "OctMD(5000)", "OctMDGS", "FCCP Peak", "Omy", "AmA"))
+
+#Recode Respiration Rate as numeric#
+DT$Rate <- as.numeric(
+        FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)`)
+
+#Run the ANOVA to get Mauchly's Test
+ezANOVA(data = DT, dv = .(Rate), wid = .(Subject), within = .(State), 
+        between = .(Condition), detailed = TRUE, type = 3)
+```
+  Please noice that in order to get this done, I had to recode the variables into single word variables (`State` and `Rate` from `Respiration State` and `Respiration Rate (pmol/sec/mg)`, respectively). I don't know why the code won't recognize the longer strings, but this is the fix.  
+
+### 4.3.3. Fligner-Killeen Test {#Fligner}
+|         Lastly, if your data are not normally distributed, you cannot perform an F-test or Levene's test; instead you must perform the Fligner-Killeen test as follows:
+```{r}
+FlingerKilleen_results <- DT[,
+   .(Statistic = fligner.test(
+     `Respiration Rate (pmol/sec/mg)` ~ `Condition`)$statistic, 
+     P.value = fligner.test(
+       `Respiration Rate (pmol/sec/mg)`~ `Condition`)$p.value),
+   by = .(`Respiration State`)]
+```
+
+```{r echo = FALSE}
+knitr::kable(FlingerKilleen_results, caption = "Fligner-Killeen Test Results")
+```
+
+  
+This should be about all of the tests you will need to properly test assumptions for your data. Once you determine the proper test, we can move on to further analysis.
+
+***
+\pagebreak
+
+# 5. Hypothesis Testing {#Analysis}
+
+|         Now that we have looked into the assumptions, we can move on to the next step: running comparisons. These should all be fairly straightforward, but can get tricky depending on what test you want to perform. Overall, doing a basic t-test and ANOVA will be simple, but things will get more complex if you wish to do a planned comparison ANOVA or something a little more complex than the basic tests (I will hopefully try to cover that at some point). For now, let's dive into the t-test.
+
+## 5.1. Hypothesis Testing with Two Variables {#Twotest}
+
+### 5.1.1. The t-test {#Ttestmain}
+
+|         The t-test analysis is fairly easy to run.[^3] Lucky for us, R comes with a t-test function and an output that is easy to understand:
+
+[^3]: *It's best to make sure that all of your [variables are identified properly](#Correcting) (e.g. as integers, characters, etc.) before running the t-test, but isn't always necessary since R should identify them properly. Still, you will need to do this for the ANOVA.*
+```{r eval = FALSE}
+t.test(y ~ x)
+```
+Where y is a numeric value and x is a binary (group) value. Pretty simple, right? You can also do:
+```{r eval = FALSE}
+t.test(y1,y2)
+```
+Where each y is a numeric value. For paired samples (data with the same subjects tested twice, as in a pre- & post-measurement), you simply need to add a `'paired = TRUE'` line like this:
+```{r eval = FALSE}
+t.test(y ~ x, paired = TRUE)
+```
+
+Now, since we are going to run multiple paired t-tests (remember this is paired data) to analyze each respiration state, we can simply use the `'lapply'` and `'sapply'` functions in the `'tidyr'` package, and we will place this information in new data frames so we can have a much simpler time looking at the data as so:
+```{r}
+#load dplyr
+library(dplyr)
+
+# Run multiple paired t-tests
+FFA_ttest_values <- lapply(FFA_ttest_Example[,5:15], 
+  function(x) t.test(x ~ FFA_ttest_Example$Condition, 
+  paired = TRUE, na.rm = TRUE))
+
+# Place p-values into columns
+FFA_ttest_pvalues <- data.frame("P.value" = sapply(
+  FFA_ttest_values, getElement, name = "p.value"))
+```
+
+The `'lapply'` function serves as a sort of loop that takes the specified columns (in this case, columns 5-15) and runs the function of choice (in this case, the t-test). The `'~'` symbol, when using it in a function of, can be thought to mean "as a function of." Essentially, we are taking columns 5-15 of our data, and applying a t-test to the data in every column 'x' as a function of the Condition. These are paired samples, and we want to remove all `'NA'` data points. Furthermore, we have placed the analysis in a new data frame 'FFA_ttest_values,' which is slightly messy. To clean this up, we will take the data frame 'FFA_ttest_values' and extract the p-values using `'sapply'` and place them in the new data frame 'FFA_ttest_pvalues.'[^8] The output will give us the new data frame `'FFA_ttest_pvalues'` which should look something like:  
+
+```{r echo = FALSE}
+knitr::kable(FFA_ttest_pvalues, caption = "A Table of the P-Values from the T-test")
+```
+
+[^8]: *If you want to extract other variables with `'sapply'` simply change the two "p.value" characters to the column name you want to extract (such as confidence interval, standard error, etc.).* 
+
+Short and sweet, if you ask me. Really, you don't need to create a data frame with only the p-values, but I find that this really helps keep the data organized and put into place. If you want to do a correction for multiple comparisons, the use the following:
+```{r}
+#Correct for multiple comparisons
+FFA_ttest_pvalues$`Adjusted p` <- p.adjust(FFA_ttest_pvalues$P.value, 
+  method = "holm")
+```
+
+I have chosen to use the Holm adjustment, which will adjust for the p value and give us:
+
+```{r echo = FALSE}
+knitr::kable(FFA_ttest_pvalues, caption = "Adjusted P-Values Using the Holm Method")
+```
+
+For more information on this code or for other adjustments that can be made, [check out the R Companion book (also in the book section below)](https://rcompanion.org/rcompanion/f_01.html).
+
+### 5.1.2. Non-parametric tests for two variables {#nonparattest}
+|         Below are non-parametric tests that can be used to analyze data that violate the [assumptions discussed prior](#AssumptionTests).
+
+**Mann-Whitney U Tests**
+  
+|         The Mann-Whitney U test (also known as the Wilcoxon rank-sum test, not to be confused with the Wilcoxon signed-rank test discussed next) is the non-parametric equivalent of an independent samples t-test. This test follows the basic code outline of the t-test, instead you will use:
+```{r eval = FALSE}
+wilcox.test()
+```
+
+So, following our example above, we would do:
+```{r}
+# Run multiple Mann-Whitney tests
+FFA_mannwhit_values <- lapply(FFA_ttest_Example[,5:15], 
+  function(x) wilcox.test(x ~ FFA_ttest_Example$Condition, 
+  na.rm = TRUE))
+
+# Place p-values into columns
+FFA_mannwhit_pvalues <- data.frame("P value" = sapply(
+  FFA_mannwhit_values, getElement, name = "p.value"))
+```
+
+And here, we see:
+
+```{r echo = FALSE}
+knitr::kable(FFA_mannwhit_pvalues, caption = "P-Values from the Mann-Whitney Test")
+```
+
+
+**Wilcoxon Signed-Rank Test**
+  
+|         The Wilcoxon Signed-Rank Test is the non-parametric equivalent of the paired t-test. As we did with the t-test, all we need to do to make this happen is add `'paired = TRUE'` to the Mann-Whitney code above, like so:
+```{r}
+# Run multiple Mann-Whitney tests
+FFA_wilcoxon_values <- lapply(FFA_ttest_Example[,5:15], 
+  function(x) wilcox.test(x ~ FFA_ttest_Example$Condition, 
+  paired = TRUE, na.rm = TRUE))
+
+# Place p-values into columns
+FFA_wilcoxon_pvalues <- data.frame("P value" = sapply(
+  FFA_wilcoxon_values, getElement, name = "p.value"))
+```
+
+And here, we see:
+
+```{r echo = FALSE}
+knitr::kable(FFA_wilcoxon_pvalues, caption = "P-Values from the Wilcoxon Test")
+```
+
+## 5.2. Hypothesis Testing with More Than Two Variables {#Multitest}
+
+|         Now, as [I mentioned before](#Stats), I think the ANOVA is the most appropriate test to run for these data. To me, it is pretty clear you would want an F-value to control for Type I (false positive) errors by performing too many tests. As [shown above](#Ttestmain), we would be performing 10 different t-tests. If we assume that $FWE \le 1 - (1 - \alpha_{IT})^{c}$, where *$\alpha_{IT}$* is the alpha level of a given test and *c* is the number of comparisons, we would get the following $FWE \le 1 - (1 - 0.05)^{10}$ which gives us a final value of $0.401$. **This means that the probability of a type I error is 0.401, or just over 40%.** I think it would go without saying that this would be a very high chance of a type I error in these data, hence the need for an ANOVA in our analysis if we want to maintain confidence in our results.  
+
+### 5.2.1. The ANOVA {#ANOVAmain}
+
+|         I'm going to preface this analysis by saying that, under normal circumstances, the ANOVA should be performed using independent samples; meaning the ANOVA is an extension of the independent samples t-test and the subjects being compared should not be the same in any two groups [(this is covered in the next section)](#Repeated). The point of this statement is to mention that the example data I will use in this section should be analyzed via a repeated-measures ANOVA,[^10] not the traditional ANOVA. Therefore, this section is meant to merely demonstrate the basics of how to run a traditional ANOVA.  
+
+[^10]: *I am starting off with the repeated-measures ANOVA instead of a one-way ANOVA because the code is essentially the same, as [I explained earlier](#ANOVA1) and gives the same result. Furthermore, it is more likely that a factorial ANOVA, rather than a one-way ANOVA, will be run on data like these.
+
+|         If you remember, I briefly covered the code [in a previous section](#ANOVA1), but I will go into more details here. Simply put, the ANOVA analysis has two steps:  
+|         1. Create a linear model of the data
+|         2. Run the ANOVA on the linear model
+While there is the second step, it isn't hard to implement in this process and is extremely straightforward to code. First, though, your data *__must be in long format.__* I cannot stress this enough, simply because this is how most other statistical software does ANOVAs and R is no different in that respect. Fortunately, the data in the ANOVA tab within the [Excel file I have created](#Pulling) is in long format. However, if you are using your own set of data and you need to do this or you need more explanation on what I mean by long and wide format, you can [read more about it here.](#Wide-Long)  
+
+|         By now, you've hopefully [identified all of your variables properly](#Correcting) in their proper columns. If you haven't, please do so first before running the ANOVA. Once we have that, we should have a table that looks something like this:
+
+```{r, echo=FALSE}
+knitr::kable(head(FFA_ANOVA_Example, 15), caption = "The First 15 Rows of Data in Long Format for the ANOVA")
+```
+
+Now, as I mentioned before, we need to first create a linear model of the data using the `'aov()'` function, then we can analyze the linear model using the `'anova()'` function. Let's start by performing an ANOVA examining the effect of the Condition (baseline vs post intervention) and Respiration State on Respiration Rate,[^5] as so:
+
+```{r}
+#Create the linear model
+ANOVA_model<- aov(`Respiration Rate (pmol/sec/mg)` ~ 
+        Condition + `Respiration State`, data = FFA_ANOVA_Example, type = "II")
+
+#Analyze the linear model
+ANOVA_table <- as.data.frame(anova(ANOVA_model))
+```
+
+For context, We should see an output similar to something like this:
+```{r echo = FALSE}
+knitr::kable(ANOVA_table, digits = 2)
+```
+
+This table is fairly intuitive to grasp.[^4] In the columns, you have your degrees of freedom, sum of squares, mean squares, F values, and lastly p-values. The rows represent the values for Factor A, Factor B, (in this case, Condition and Respiration State, respectively),, and the Residuals. You'll notice that in my example, the p-values are labeled as 0. This is because the p values are so low (probably due to the way I have arranged the random data I created from thin air) that the tables just rounded them to 0. If I inspect the column by itself, the p-values are actually:
+
+```{r echo = FALSE}
+anova(ANOVA_model)[5]
+```
+[^4]: *This is the way to analyze a two-way (or factorial) ANOVA, which is what we need to do for these data. If you want to do a one-way ANOVA for any reason, simply exclude the `'+ FactorB'` part (in this case ``'+ `Respiration State```).*  
+  
+[^5]: *This is just an example for reference. Normally, since we are comparing the same subjects over time, we should be using a [repeated-measures or a mixed design ANOVA,](#Repeated) which will be covered in the next section.*
+
+
+|         Based on this analysis, we can see that our results are indeed very significant. It appears that there is a 'Condition' effect, meaning that the post-intervention had some effect on our subjects. Personally, I don't care much about the p-value from the Respiration State effect, since we would expect respiration rates to be different when we add different substrates. I didn't include an interaction in this analysis because it wouldn't add any meaning to the data, but if you wanted to do so, simply change the `'+'` to a `'*'` in the equation like so:
+
+```{r eval=FALSE}
+aov(`Respiration Rate (pmol/sec/mg)` ~ 
+        Condition * `Respiration State`, data = FFA_ANOVA_Example, type = "II")
+```
+
+|         Lastly, I should mention the ability to run different types of sum of squares analyses in these functions. There are 3 types of sum of squares analyses [(more on that here)](https://towardsdatascience.com/anovas-three-types-of-estimating-sums-of-squares-don-t-make-the-wrong-choice-91107c77a27a):  
+1. **Type I Sum of Squares** performs the sum of squares analysis in sequential order, assigning a maximum value to Factor A, then the remaining variation to Factor B, then the interaction (if present), then the residual. In other words, this test gradually adds in factors with each analysis. Annotated, it looks like this:  
+SS(A) for Factor A.  
+SS(B | A) for Factor B.   
+SS(AB | A, B) for interaction AB.  
+In this case, the ordering of the model makes a big difference in the result. In this case, it is unwise to use this unless the main effects are all completely independent of each other, which is not the case for our data.  
+
+2. **Type II Sum of Squares** is not sequential like the Type I Sum of Squares, but it also does not take the interaction into effect and tests each main effect after the other. Annotated, it looks like:  
+SS(A | B) for Factor A.  
+SS(B | A) for Factor B.  
+This type or analysis is beneficial if you care most about the main effects (which we do here) rather than the interaction effects, or if there is no interaction effect.  
+
+3. **Type III Sum of Squares** are not sequential, like Type II Sum of Squares, but *do* take into account the interaction effects. The annotation looks like:  
+SS(A | B, AB) for Factor A.  
+SS(B | A, AB) for Factor B.  
+This type is useful if you don't want an ordering effect, and expect an interaction effect. Also, this type is **_the only one that should be used if you have unequal sample sizes._** Types I and II should not be used if your groups have unequal sample sizes.  
+  
+|         To change the type of Sum of Squares analysis, simply change the `'type = '` line to the desired test. Overall, this process is all fairly easy to comprehend.
+
+### 5.2.2. Repeated-Measures and Mixed Design ANOVAs {#Repeated}
+|         The Repeated-Measures and Mixed Design ANOVAs are slightly more complicated to understand and implement. The best way I try to remember this is:
+* **ANOVAs** (factorial or not) are used with *independent samples,* and are extensions of *independent t-tests.*
+* **Repeated-Measures ANOVAs** are used with *paired samples,* and are extensions of *paired t-tests.*
+* **Mixed Design ANOVAs** are for *any combination of independent and dependent samples.*
+
+In essence, each ANOVA is designed to answer a different question, just like the independent and paired samples t-tests. In [the last section](#ANOVAmain), the data we would analyze would be considered to be a part of a measurement of independent samples. Now, with the repeated-measures ANOVA, we will analyze data from the same subjects across conditions, like time. To do this, I found that we first need to actually change the name of some of our variables so that the variable names are a single word[^7], like so:
+```{r}
+#Set the rate as a numeric and the state as a factor variable
+FFA_ANOVA_Example$Rate <- as.numeric(
+  FFA_ANOVA_Example$`Respiration Rate (pmol/sec/mg)`)
+
+FFA_ANOVA_Example$State <- as.factor(
+  FFA_ANOVA_Example$`Respiration State`)
+```
+
+[^7]: *It appears that the package we use to run is test, `'ez'`, doesn't like it when I have variable names containing more than one word. I'm not sure why that's the case, but I found a way around it all. This is still the easiest way to go about performing the repeated-measures ANOVA.*
+
+I have changed the names of the 'Respiration Rate' and 'Respiration State' variables to 'Rate' and 'State' respectively. Now that we have that, we can use the `'ezANOVA'` function in the `'ez'` package as so:
+
+```{r}
+#Load the ez package
+library(ez)
+
+#Run the repeated measures ANOVA
+repeated_measures <- ezANOVA(data = FFA_ANOVA_Example, dv = .(Rate), wid = .(Subject), 
+        within = .(Condition, State), type = "III", detailed = TRUE)
+
+
+```
+
+This function is a little different than the others. Essentially, we are choosing the data frame 'FFA_ANOVA_Example', our dependent variable (dv) is 'Rate,' the within-subjects identifier (wid) is 'Subject,' and the two within-subjects conditions are 'Condition' and 'State.' *__It is important to have the '.()' in the code with each parameter.__* The code will not work if those are missing. Lastly, I have chosen a type III sum of squares analysis and a detailed output. When we run this, we will see an output like so:
+```{r echo = FALSE}
+knitr::kable(repeated_measures$ANOVA, digits = 3, caption = "Repeated-Measures ANOVA Results")
+```
+
+```{r echo = FALSE}
+knitr::kable(repeated_measures$`Mauchly's Test for Sphericity`, digits = 3, caption = "Sphericity Results (Repeated-Measures)")
+```
+
+```{r echo = FALSE}
+knitr::kable(repeated_measures$`Sphericity Corrections`, digits = 3, caption = "Sphericity Corrections (Repeated-Measures)")
+```
+
+Now, we have a much different layout than we did before, but it follows the same pattern. We first have the degrees of freedom values, sums of squares, F-value, p-value, a column with asterisks representing significance, and finally we have a general eta-squared [(more on this in the Effect Size section)](#EffectSize). The next set of rows are the results of Mauchly's Test for Sphericity, followed by the corrections if sphericity has been violated. In this case, if sphericity has been violated (indicated by significance in Mauchly's test), then it is best to use the Greenhouse-Geisser correction (GGe column) and the p-values from the p[GG] column. Here, we see that there was a significant difference between baseline and post-intervention, a difference somewhere in the respiration state, and an interaction effect.   
+  
+|         Overall this is fairly straightforward, but it is different than the past tests we did. Luckily, the `'ezANOVA'` function is fairly robust and we don't need to change much if we want to do a mixed designs ANOVA. All we would have to add is a between factor, as so:
+
+```{r}
+#Run the mixed design ANOVA
+mixed_design <- ezANOVA(data = FFA_ANOVA_Example, dv = .(Rate), wid = .(Subject), 
+        between = .(Leg), within = .(Condition, State), 
+        type = "III", detailed = TRUE)
+```
+
+```{r echo = FALSE}
+knitr::kable(mixed_design$ANOVA, digits = 3, caption = "Mixed Design ANOVA Results")
+```
+
+```{r echo = FALSE}
+knitr::kable(mixed_design$`Mauchly's Test for Sphericity`, digits = 3, caption = "Sphericity Results (Mixed Design)")
+```
+
+```{r echo = FALSE}
+knitr::kable(mixed_design$`Sphericity Corrections`, digits = 3, caption = "Sphericity Corrections (Mixed Design)")
+```
+
+Of course, here we will have a much larger set of tables because we have introduced another factor (Leg) to our analysis, but everything is the same as the repeated-measures ANOVA. Here, our results show the same outcomes as before (significant differences in condition and respiration), but the leg that the sample came from seemed to have no impact on respiration rate.
+
+
+### 5.2.3. Non-parametric tests for more than two samples {#nonparaANOVA}
+
+
+
+### 5.2.4. *Post-hoc* Methods {#Posthoc}
+
+|         Once you're done with the ANOVA analysis, you'll probably want to perform a *post hoc* analysis to determine **where** exactly the significant differences are (remember, ANOVA only tells you that there is a good chance that a significant difference exists in the data, but does not tell you which values are significant). Fortunately, it's also pretty simple to run all of these.
+
+**Pairwise Tests**  
+  
+|         To perform Tukey's HSD for the factorial ANOVA, all we need to do is take the ANOVA model we made previously and put it into the `'lsmeans'` function from the `'lsmeans'` package, as so:
+```{r}
+#Load the package lsmeans
+library(lsmeans)
+
+#Calculate the Tukey corrections
+tukey_results<- lsmeans(ANOVA_model, pairwise ~ `Respiration State`:Condition, 
+        adjust = "tukey", paired = TRUE)
+
+#Show the first 10 results of each section
+head(tukey_results$lsmeans)
+head(tukey_results$contrasts)
+```
+
+This table is extremely long, especially considering the huge number of contrasts we have performed. Therefore, I will not include the output, but it should be fairly self-explanatory if you've ever done a *post-hoc* analysis in the past. You can also do other adjustments, such as the Scheffe or Sidak adjustments by typing in `"scheffe"` or `"sidak"` instead of `"tukey"`. The nice thing about this method is that it gives you the lower and upper confidence levels. However, it is slightly more difficult to interpret. If you don't care about the confidence levels and only want the adjusted p-values, you can use the following for both factorial and repeated measures ANOVAs:
+
+```{r}
+#Calculate the Holm correction
+holm_results <- pairwise.t.test(x = FFA_ANOVA_Example$`Rate`, 
+      g = FFA_ANOVA_Example$State:FFA_ANOVA_Example$Condition, 
+      paired = TRUE, p.adjust.method = "holm")
+```
+
+As with the other adjustment method, this test can use the Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg or its alias FDR, or the Benjamini-Yekutieili adjustment by using `"holm"`, `"hochberg"`, `"hommel"`, `"bonferroni"`, `"BH"`, `"FDR"`, or `"BY"` respectively. This code can also be done for Wilcoxon tests as so:
+
+```{r}
+#Wilcoxon Comparison
+wilcoxon_results <- pairwise.wilcox.test(x = FFA_ANOVA_Example$`Rate`, 
+      g = FFA_ANOVA_Example$State:FFA_ANOVA_Example$Condition, 
+      paired = TRUE, p.adjust.method = "holm")
+```
+
+
+### 5.2.5. Planned Comparisons {#PlannedComp}
+
+|         Now, running *post-hoc* tests can be slightly tedious and difficult, especially when there are so many data points that don't matter to our story. For example, we would probably not care about the difference between basal respiration at baseline and respiration with oligomycin post-intervention; but we would certainly care a lot about the difference in maximal respiration at baseline compared to post-intervention. In fact, it would probably be best to compare the baseline and post-intervention values for all of the respiration states (like we did with the t-tests). In all probability, it is probably best to just run the t-tests with a p-value adjustment, but I will try to show contrasts here. Be warned: they can be complicated.
+
+
+
+
+## 5.3. Linear Modeling {#GLM}
+
+
+
+
+***
+\pagebreak
+
+# 6. Effect Sizes {#EffectSize}
+
+|         Effect sizes are often useful counterparts to your p-values for when you want to add more information to your data. Since effect sizes are best done in long format after doing t-tests, I'll probably just write about those for now and add in something about ANOVAs later. The reason for that is that effect sizes from ANOVAs usually require contrasts, which I haven't yet developed.  
+  
+|        To calculate Cohen's *d* from the t-test data, simply use the `'effectsize'` package as so:
+```{r}
+#Load the package effectsize
+library(effectsize)
+
+#Calculate ES
+effect_sizes <- data.frame(t(sapply(FFA_ttest_Example[,5:15], 
+        function(x) effectsize::cohens_d(x, y = "Condition", 
+        data = FFA_ttest_Example, pooled = TRUE))))
+```
+
+This is essentially the same function used to do the t-tests, just with a different function applied to the loop.[^12] This gives us the output as follows:
+
+
+
+```{r echo = FALSE}
+knitr::kable(effect_sizes)
+```
+
+[^12]: *I added the t() function which transposes the data, only to make it easier to read.*  
+
+
+The only thing I have with these results is that the effect size values are the negative values of what they should be. If you need to change this, just do the following:
+
+```{r}
+effect_sizes$Cohens_d <- as.numeric(effect_sizes$Cohens_d)
+
+effect_sizes$Cohens_d_new <- effect_sizes$Cohens_d[] * -1
+```
+
+Or if you want to have the absolute values:
+```{r}
+effect_sizes$Cohens_d_all_pos <- abs(effect_sizes$Cohens_d)
+```
+
+
+|         If you care to do the effect sizes as a pairwise comparison, you can create contrasts fairly simply and run a quick analysis to get the effect sizes for each pairwise comparison like so:
+
+```{r}
+#Create a function to calculate contrasts
+rcontrast <- function(t, df)
+{r <- sqrt(t^2/(t^2 + df))
+    paste("r = ", r)}
+
+#Create the data frame of variables to be analyzed
+tukey_contrasts <- data.frame(tukey_results$contrasts)
+
+#Calculate pairwise effect sizes using the created contrasts function above
+tukey_contrasts$`Effect Size` <- t(data.frame(lapply(
+  tukey_contrasts$t.ratio, function(x) rcontrast(x, 529))))
+```
+
+```{r echo = FALSE}
+knitr::kable(head(tukey_contrasts, 10))
+```
+
+
+***
+\pagebreak
+# 7. Visualizing the Data: The Simple Guide to ggplot2 {#Visualizing}
+
+## 7.1. The Basics {#PlotBasics}
+
+### 7.1.1. The Importance of Visualization
+
+|          I think the importance of data visualization goes without saying: seeing the data is much more telling than reporting the numbers. Thus, painting an accurate picture of the data at hand is imperative for the communication of scientific data. Not only do we want readers to visualize our results in a meaningful way, we also want to provide an explaination of our results in a manner that compliments our manuscript. In this section, I till try to detail a few different plots (mostly using the [packages `'ggplot2'` and `'ggpubr'`](#PlotPackages)) that can be very helpful for the interpretation and communication of respirometry data.
+
+### 7.1.2. Understanding Plotting in R {#UnderstandingPlotting}
+
+|         Plotting in R can be fairly simple, once the environment of R (and ggplot2) is well understood. Essentially, graphing in R works by creating a base graph with the data you will be using, then creating layers upon layers of the data you want to visualize. The process is analogous to building a cake: you start with the inner cake layers (data), then add icing (data points), some color, a message like "Happy Birthday!" (titles, legends, etc.), maybe a few candles (significance asterisks), and *Voila*! Your graph is made.  
+|         Each layer we place to our code will add another detail to the graph. However, while this is a very powerful feature in R, we must always remember that the simplest graphs are often the best graphs. It is important to not get carried away when graphing, such as adding too many points or details that confuse the reader, rather than compliment the story. When making graphs, it is best to always be efficient with your space and [colors](#Color) --- guiding the reader to the most important information using proper colors and visuals while having sufficient negative space.
+
+### 7.1.3. ggplot2 and ggpubr: The two graphing packages of choice {#PlotPackages}
+|         The two most popular graphing tools that are used in R are `'ggplot2'` and `'ggpubr'`, both of which are important tools to create great visualizations. The ggplot2 package is the most well-known visualization package used in R. It was developed by Hadley Wickham (the same person who developed the Tidyverse) based on [the Grammar of Graphics](https://www.amazon.com/Grammar-Graphics-Statistics-Computing/dp/0387245448). Logically,`'ggplot2'` is based on the idea that you can build layer upon layer to get the final graphical outcome of choice.  
+|         Similarly, `'ggpubr'` is founded on the same principles, but is created to "generate publication-ready graphics." Both packages are relatively similar in how they operate, so choose the package you like best. Generally, I think `'ggpubr'` is easier to work with, but `'ggplot2'` has the advantage of being more flexible in many aspects. Another thing to note is that `'ggpubr'` *does not* work well with variable names that have more than one string of characters in it (i.e. more than one word), meaning you can only use factors that contain a single word in `'ggpubr'`. It isn't the greatest, but it still works fine --- you can also just [simply rename the factor](#Renaming).
+
+### 7.1.4. Color Palettes {#Color}
+|         Choosing color is an important aspect of graphing. Not only does one need to consider the audience and message (colors are associated with feelings, but are largely dependent on sociocultural norms). Furthermore, a fair portion of the population is colorblind. Therefore, to convey an appropriate message, one must consider strongly the audience and message of the manuscript. That said, color is not something one wants to mess up when preparing figures. R is great in that you can create many different color combinations to make awesome graphs. A useful cheatsheet to this [can be found here](https://www.nceas.ucsb.edu/sites/default/files/2020-04/colorPaletteCheatsheet.pdf). However, choosing colors on your own can still be a tricky task.
+|         Luckily for us, there are several packages that contain color palettes [(and a more comprehensive list can be found here)](https://github.com/EmilHvitfeldt/r-color-palettes#color-blindness). Three common packages are `'RColorBrewer'`, `'ggsci'`, and `'wesanderson'` (yes, [like the film director](https://en.wikipedia.org/wiki/Wes_Anderson)). Let's take a look at these, starting with `'RColorBrewer'`:
+```{r}
+#Load RColorBrewer
+library(RColorBrewer)
+
+#Show palettes
+display.brewer.all()
+```
+The nice thing about `'RColorBrewer'` is that there are specific palettes that are colorblind, which we can identify by:
+```{r}
+display.brewer.all(colorblindFriendly = TRUE)
+```
+|         The `'ggsci'` package contains several palettes that are used in major journals (Nature, Lancet, others). We can only [view these online for now](https://cran.r-project.org/web/packages/ggsci/vignettes/ggsci.html).
+
+
+|         For the `'wesanderson'` palette, we can't see all of the palettes unless you go to [the GitHub site](https://github.com/karthik/wesanderson), but all of the palette names can be listed by:
+```{r}
+library(wesanderson)
+
+names(wes_palettes)
+```
+Which you can then view each palette individually by:
+```{r, eval = FALSE}
+wes_palette("FantasticFox1")
+```
+
+
+## 7.2. Density Plots {#Density}
+
+|         Density plots are useful to understand the distribution of the data, and to visualize the spread of data points. In my experience, I have found that `'ggpubr'` is much easier to work with in creating simple density plots compared to `'ggplot'`, but this is mostly because of my personal preference. Now, when we use `'ggpubr'` for this, we need to remember that we must input all of the variables we need into the function. So, when we call `ggdensity()` to create the plot, we need to call the data, call the `x` variable, and input whatever else we need. Functions like `color` and `fill` will indicate how to separate the color of the lines and the fill color of the variables you have. If we want to show where the mean is, we can also do so by `'add = "mean"'`. So, if I want to look at the distribution of State III respiration data (OctMGDS), I could do something like:
+
+```{r}
+#Load ggpubr
+library(ggpubr)
+
+ggdensity(data = FFA_ttest_Example, x = "OctMDGS", color = "Condition", 
+          fill = "Condition", add = "mean", 
+          xlab = "Respiration Rate (pmol/sec/mg)",
+          title = "Density Plot of OctMDGS Data", subtitle = "Distribution of the Frequency of Respiration Rates")
+```
+
+Likewise, if I wanted to look at leak respiration (OctM), I could also do:
+```{r}
+ggdensity(data = FFA_ttest_Example, x = "OctM", color = "Condition", 
+          fill = "Condition", add = "mean", 
+          xlab = "Respiration Rate (pmol/sec/mg)",
+          title = "Density Plot of OctM Data", subtitle = "Distribution of the Frequency of Respiration Rates")
+```
+Similarly, we can show the distribution of all of the Baseline data by using the `'subset'` and `'select()'` functions, and the `'%in%'` operator to select only the baseline respiration data like so:
+
+```{r}
+ggdensity(data  = subset(FFA_ANOVA_Example, Condition %in% c("Baseline")), 
+          x = "Rate", color = "State", add = "mean") + 
+  theme(legend.text = element_text(size = 8))
+```
+
+And we can run it on the post-interverntion:
+```{r}
+ggdensity(subset(FFA_ANOVA_Example, Condition %in% c("Post")), 
+          x = "Rate", color = "State", add = "mean") + 
+  theme(legend.text = element_text(size = 8))
+```
+
+## 7.3. Bar Plots {#BarPlots}  
+  
+|         Bar plots are perhaps the most commonly used type of graph in the literature, so it only seems appropriate to cover them in this document. This is really the part of the section where layers become important. Furthermore, I will try to outline as much code as I can, as well as explain any notes. As before, `'ggpubr'` is the simplest function to use. If we use `'ggpubr'`, we can make a simple plot by the following code:
+```{r}
+#Create the basic plot
+ggpubr_bar <- ggbarplot(data = FFA_ANOVA_Example, x = "State", y = "Rate", fill = "Condition", 
+                        position = position_dodge(0.7))
+
+ggpubr_bar
+```
+Each time we create a plot, we must, at the very least, tell R the dataset we want to use (via `'data = '`), and the x and y variables. If you have a grouping variable (as we do with the 'Condition'), you can designate that with the `'fill = '` line --- however, you also need to have the position of the bars (via `'position = position_dodge(0.7)'`) specifically stated as well or else you will be given a stacked bar chart. Now, as you can probably tell, our graph is very messy and is missing a lot of components. To begin cleaning it up, we will add a mean and error bars, like so:
+```{r}
+ggpubr_bar <- ggbarplot(data = FFA_ANOVA_Example, x = "State", y = "Rate", fill = "Condition", 
+                        position = position_dodge(0.7), add = "mean_se", error.plot = "upper_errorbar")
+
+ggpubr_bar
+```
+We can also change the color by inputting a `'palette ='` line like so (this is where you can use a palette or your own color choices, as I have):
+```{r}
+ggpubr_bar <- ggbarplot(data = FFA_ANOVA_Example, x = "State", y = "Rate", fill = "Condition", 
+                        position = position_dodge(0.7), add = "mean_se", error.plot = "upper_errorbar", 
+                        palette = c("white", "dark red"))
+
+ggpubr_bar
+```
+
+
+Much better. Now, we should probably begin working out the aesthethics with this by rotating the text, which we will do by adding a layer (via `'+'`), like so
+```{r}
+ggpubr_bar <- ggbarplot(data = FFA_ANOVA_Example, x = "State", y = "Rate", fill = "Condition", 
+                        position = position_dodge(0.7), add = "mean_se", error.plot = "upper_errorbar",
+                        palette = c("white", "dark red")) +
+  rotate_x_text(45)
+
+ggpubr_bar
+```
+
+
+***
+\pagebreak  
+# 8. Helpful Resources {#Resources}
+Below are the resources I have used to compile this document
+
+## 8.1. Books
+### 8.1.1. For Statistics
+  * **[Discovering Statistics Using R](https://www.discoveringstatistics.com/books/discovering-statistics-using-r/)** by Andy Field, Jeremy Miles, and Zoë Field
+  * **[R for Data Science](https://r4ds.had.co.nz/)** by Garett Grolemund & Hadley Wickham
+  * **[R Cookbook, 2nd Edition](https://rc2e.com/)** by JD Long & Paul Teetor
+  * **[An R Companion for the Handbook of Biological Statistics](https://rcompanion.org/rcompanion/index.html)** by Salvatore S. Mangiafico
+  * **[Handbook of Biological Statistics](http://www.biostathandbook.com/)** by John H. McDonald
+  * **[Learning Statistics with R: A tutorial for psychology students and other beginners](https://learningstatisticswithr.com/book/)** by Danielle Navarro
+  * **[R Programming for Data Science](https://bookdown.org/rdpeng/rprogdatascience/)** by Roger D. Peng
+  * **[Advanced R](http://adv-r.had.co.nz/)** by Hadley Wickham
+
+
+### 8.1.2. For Graphing
+  * **[R Graphics Cookbook, 2nd edition](https://r-graphics.org/)** by Winston Chang
+  * **[R Cookbook, 2nd Edition](https://rc2e.com/)** by JD Long & Paul Teetor
+  * **[ggplot2: Elegant Graphics for Data Analysis](https://ggplot2-book.org/)** by Hadley Wickham
+  * **[ggplot2 Cheat Sheet](https://rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf)**
+
+## 8.2. Blogs
+  * **[Towards Data Science](https://towardsdatascience.com/)**
+
+## 8.3. Forums
+  * **[Data Novia](www.datanovia.com)**
+  * **[Stack Exchange](stats.stackexchange.com)**
+  * **[Stack Overflow](https://stackoverflow.com/)**
+  * **[STHDA](http://www.sthda.com/english/)**
+  
+## 8.4. Videos
+  * **[University of Texas Statistics Online Support (SOS)](http://sites.utexas.edu/sos/)**
+  
+## 8.5. Resources for Packages
+  * **[RDocumentation](https://www.rdocumentation.org/)** 
+  * **[CRAN package search](https://cran.r-project.org/)**
+
+  ***
+\pagebreak
+
+# 9. Afterthoughts & Updates {#Afterthoughts}
+|         This section is dedicated to other lines of code that may be useful for the exploration of data outside of the Excel files that I have created and mentioned in the [first section](#Pulling) of the document. Some of these may be more useful if you have other ways of analyzing the data than what I have outlined above. Though I think that the above sections are useful as well.
+
+
+## 9.1. Categorizing Continuous Variables {#Categorizing}
+
+Sometimes it is very useful to take numeric data and group them into ranges or categories. We can easily do this using the `data.table` package. For example, say we have a variable with age ranges, and we want to divy them up into 'Young', 'Middle Age', and 'Elderly'. For this, we need the `'data.table'` package, and we will run this code:
+```{r eval = FALSE}
+setDT(FFA_ttest_Example)[ , "Age Group" := cut(Age, 
+                                breaks = c(0,45,65,500), 
+                                right = FALSE, 
+                                labels = c("Young","Middle Age", "Elderly"))]
+```
+
+This line takes our data frame ('FFA_ttest_Example') and creates a new column titled 'Age Group' based on values in the 'Age' column with the ranges of (0-45, 45-65, 65+), and categorizes them into 'Young', 'Middle Age', and 'Elderly' age groups. Furthermore, we can do something similar if we wish to have more details in our grouping categories, such as combining physical activity and age to get a category such as 'Young Active' by doing the following;
+
+```{r eval = FALSE}
+FFA_ttest_Example <- FFA_ttest_Example %>%
+  mutate(ActGroup = case_when((Age < 45 & Steps < 5000) ~ "Young Sedentary",
+                           (Age < 45 & Steps > 5000) ~ "Young Active",
+         (Age > 45 & Steps < 5000) ~ "Elderly Sedentary", 
+(Age > 45 & Steps > 5000) ~ "Elderly Active"))
+```
+
+
+## 9.2. Calculations
+
+|         Sometimes it is easier to perform calculations (such as RCR and sensitivity calculations) directly in R compared to doing it in Excel. I will include some examples that I think are common and useful for that
+
+### 9.2.1. Respiratory Control Ratio (RCR) {#RCR}
+
+|         RCR is probably one of the more common calculations used in respirometry analysis. Classicaly defined by Chance, RCR is the ratio of State 3 to State 4 respiration; or, the ratio of maximal respiration to leak respiration. The purpose of the RCR is to determine the "efficiency" of the mitochondria, and how much respiration is "wasted" by proton leak. To create this column, we will simply create a new column based of a mathematical function:
+
+```{r}
+FFA_ttest_Example$RCR <- (FFA_ttest_Example$`OctMD(5000)`/FFA_ttest_Example$OctM)
+```
+
+The same thing can be done for sensitivity by using the variables of your choosing.
